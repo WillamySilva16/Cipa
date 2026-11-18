@@ -1,5 +1,5 @@
 # 1) build do front
-FROM node:20-alpine AS front
+FROM node:20-slim AS front
 WORKDIR /front
 COPY frontend/package*.json ./
 RUN npm install
