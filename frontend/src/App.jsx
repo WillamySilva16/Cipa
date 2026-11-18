@@ -195,18 +195,23 @@ function Votacao() {
             </p>
           )}
 
-          {visiveis.map((c) => (
-            <label key={c.nome} className="cand">
-              <input type="radio" name="cand" checked={escolha === c.nome} onChange={() => setEscolha(c.nome)} />
-              <span className="caixa" aria-hidden="true">
-                <svg viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
-              </span>
-              <span className="info">
-                <b>{c.nome}</b>
-                {c.funcao && <small>{c.funcao}</small>}
-              </span>
-            </label>
-          ))}
+          <div className="grade">
+            {visiveis.map((c) => (
+              <label key={c.nome} className="cand">
+                <input type="radio" name="cand" checked={escolha === c.nome} onChange={() => setEscolha(c.nome)} />
+                <span className="cand-topo">
+                  <span className="mini" aria-hidden="true">{iniciais(c.nome)}</span>
+                  <span className="caixa" aria-hidden="true">
+                    <svg viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
+                  </span>
+                </span>
+                <span className="info">
+                  <b>{c.nome}</b>
+                  {c.funcao && <small>{c.funcao}</small>}
+                </span>
+              </label>
+            ))}
+          </div>
 
           <label className="cand branco">
             <input type="radio" name="cand" checked={escolha === BRANCO} onChange={() => setEscolha(BRANCO)} />
@@ -219,7 +224,7 @@ function Votacao() {
 
         {erro && <p className="msg erro" role="alert">{erro}</p>}
 
-        <div className="acoes">
+        <div className="acoes fixa">
           <button type="button" className="primario" disabled={!escolha || carregando} onClick={() => dlg.current?.showModal()}>
             {carregando ? 'Registrando…' : 'Confirmar voto'}
           </button>
