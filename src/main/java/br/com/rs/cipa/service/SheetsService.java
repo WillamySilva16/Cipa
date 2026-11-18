@@ -12,15 +12,21 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 
 @Service
 public class SheetsService {
     private final Sheets sheets;
 
-    public SheetsService(@Value("${google.credentials-json}") String json) throws Exception {
-        if (json == null || json.isBlank()) {
-            throw new IllegalStateException("Defina GOOGLE_CREDENTIALS_JSON (JSON da conta de serviço).");
+    public SheetsService(@Value("${google.credentials-json}") String valor) throws Exception {
+        String json = valor == null ? "" : valor.trim();
+        if (json.isEmpty()) {
+            throw new IllegalStateException("Defina GOOGLE_CREDENTIALS_JSON (JSON da conta de serviço, puro ou em base64).");
+        }
+        // aceita o JSON puro ou em base64 (base64 não sofre com aspas e quebras de linha)
+        if (!json.startsWith("{")) {
+            json = new String(Base64.getMimeDecoder().decode(json), StandardCharsets.UTF_8);
         }
         GoogleCredentials cred = GoogleCredentials
                 .fromStream(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)))
