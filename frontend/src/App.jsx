@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { validarCpf, registrarVoto, apuracao } from './api.js'
 
 const BRANCO = 'VOTO EM BRANCO'
+const SEGUNDOS_RESET = 6
 
 const mascara = (v) =>
   v.replace(/\D/g, '').slice(0, 11)
@@ -18,6 +19,37 @@ const embaralha = (lista) => {
   return a
 }
 
+const iniciais = (nome = '') => {
+  const p = nome.trim().split(/\s+/).filter(Boolean)
+  if (!p.length) return '?'
+  return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase()
+}
+
+function Urna() {
+  return (
+    <svg className="urna" viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="6" y="20" width="36" height="22" rx="4" fill="#F5B700" />
+      <rect x="14" y="26" width="20" height="4" rx="2" fill="#0A2347" />
+      <path d="M18 6h12a2 2 0 0 1 2 2v9H16V8a2 2 0 0 1 2-2z" fill="#fff" />
+      <path d="M20 11l3 3 5-6" fill="none" stroke="#1558D6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Passos({ atual }) {
+  const itens = ['Identificação', 'Voto', 'Concluído']
+  return (
+    <ol className="passos" aria-label="Etapas da votação">
+      {itens.map((t, i) => (
+        <li key={t} className={i < atual ? 'feito' : i === atual ? 'atual' : ''} aria-current={i === atual ? 'step' : undefined}>
+          <span className="bola">{i < atual ? '✓' : i + 1}</span>
+          <span className="rot">{t}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 export default function App() {
   const [rota, setRota] = useState(window.location.hash)
   useEffect(() => {
@@ -26,13 +58,18 @@ export default function App() {
     return () => window.removeEventListener('hashchange', f)
   }, [])
   return (
-    <main>
-      <header>
-        <h1>Eleição CIPA</h1>
-        <p className="sub">Seu voto é secreto.</p>
+    <>
+      <header className="topo">
+        <div className="topo-in">
+          <Urna />
+          <div>
+            <h1>Eleição da CIPA</h1>
+            <p>Seu voto é secreto.</p>
+          </div>
+        </div>
       </header>
-      {rota === '#apuracao' ? <Apuracao /> : <Votacao />}
-    </main>
+      <main className="cartao">{rota === '#apuracao' ? <Apuracao /> : <Votacao />}</main>
+    </>
   )
 }
 
@@ -43,16 +80,14 @@ function Votacao() {
   const [escolha, setEscolha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
+  const dlg = useRef(null)
 
-  const candidatos = useMemo(
-    () => (dados ? [...embaralha(dados.candidatos), { nome: BRANCO, funcao: '' }] : []),
-    [dados]
-  )
+  const candidatos = useMemo(() => (dados ? embaralha(dados.candidatos) : []), [dados])
 
-  // volta para a tela inicial depois do voto, para o próximo eleitor
+  // depois do voto a tela volta ao início sozinha, para o próximo eleitor
   useEffect(() => {
     if (etapa !== 'fim') return
-    const t = setTimeout(() => window.location.reload(), 6000)
+    const t = setTimeout(() => window.location.reload(), SEGUNDOS_RESET * 1000)
     return () => clearTimeout(t)
   }, [etapa])
 
@@ -72,8 +107,7 @@ function Votacao() {
   }
 
   async function confirmar() {
-    if (!escolha) return
-    if (!window.confirm(`Confirmar voto em: ${escolha}?\nNão será possível alterar.`)) return
+    dlg.current?.close()
     setErro('')
     setCarregando(true)
     try {
@@ -90,51 +124,109 @@ function Votacao() {
     setCpf(''); setDados(null); setEscolha(''); setErro(''); setEtapa('cpf')
   }
 
+  const rotuloEscolha = escolha === BRANCO ? 'voto em branco' : escolha
+
   if (etapa === 'fim')
     return (
-      <section className="card fim">
-        <div className="ico">✓</div>
-        <h2>Voto registrado!</h2>
-        <p className="sub">Obrigado por participar da eleição da CIPA.</p>
-      </section>
+      <>
+        <Passos atual={3} />
+        <section className="fim">
+          <svg className="selo" viewBox="0 0 80 80" aria-hidden="true">
+            <circle cx="40" cy="40" r="36" />
+            <path d="M24 41l11 11 22-24" />
+          </svg>
+          <h2>Voto registrado</h2>
+          <p>Obrigado por participar da eleição da CIPA. Você já pode fechar esta página.</p>
+          <div className="reset" aria-hidden="true">
+            <span style={{ animationDuration: `${SEGUNDOS_RESET}s` }} />
+          </div>
+          <small>A tela volta ao início em {SEGUNDOS_RESET} segundos.</small>
+        </section>
+      </>
     )
 
   if (etapa === 'voto')
     return (
-      <section className="card">
-        <div className="quem">
-          Votando como
-          <b>{dados.nome}</b>
-          <span>{dados.cargo}</span>
+      <>
+        <Passos atual={1} />
+        <div className="eleitor">
+          <span className="avatar" aria-hidden="true">{iniciais(dados.nome)}</span>
+          <div className="eleitor-txt">
+            <strong>{dados.nome}</strong>
+            <span>{dados.cargo}</span>
+          </div>
+          <button type="button" className="link" onClick={voltar} disabled={carregando}>Não sou eu</button>
         </div>
-        {candidatos.map((c) => (
-          <label key={c.nome} className={'cand' + (escolha === c.nome ? ' sel' : '')}>
-            <input type="radio" name="cand" checked={escolha === c.nome} onChange={() => setEscolha(c.nome)} />
-            <span>
-              {c.nome}
-              {c.funcao && <small>{c.funcao}</small>}
+
+        <fieldset className="cedula" disabled={carregando}>
+          <legend>
+            <h2>Escolha um candidato</h2>
+            <p>Marque uma opção. Você vota uma única vez.</p>
+          </legend>
+
+          {candidatos.map((c) => (
+            <label key={c.nome} className="cand">
+              <input type="radio" name="cand" checked={escolha === c.nome} onChange={() => setEscolha(c.nome)} />
+              <span className="caixa" aria-hidden="true">
+                <svg viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
+              </span>
+              <span className="info">
+                <b>{c.nome}</b>
+                {c.funcao && <small>{c.funcao}</small>}
+              </span>
+            </label>
+          ))}
+
+          <label className="cand branco">
+            <input type="radio" name="cand" checked={escolha === BRANCO} onChange={() => setEscolha(BRANCO)} />
+            <span className="caixa" aria-hidden="true">
+              <svg viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
             </span>
+            <span className="info"><b>Voto em branco</b></span>
           </label>
-        ))}
-        <button disabled={!escolha || carregando} onClick={confirmar}>
-          {carregando ? 'Registrando…' : 'Confirmar voto'}
-        </button>
-        <button className="sec" disabled={carregando} onClick={voltar}>Voltar</button>
-        {erro && <p className="msg err">{erro}</p>}
-      </section>
+        </fieldset>
+
+        {erro && <p className="msg erro" role="alert">{erro}</p>}
+
+        <div className="acoes">
+          <button type="button" className="primario" disabled={!escolha || carregando} onClick={() => dlg.current?.showModal()}>
+            {carregando ? 'Registrando…' : 'Confirmar voto'}
+          </button>
+        </div>
+
+        <dialog ref={dlg} className="modal" onClick={(e) => e.target === dlg.current && dlg.current.close()}>
+          <h3>Confirmar seu voto?</h3>
+          <p>
+            Você vai votar em <strong>{rotuloEscolha}</strong>. Depois de confirmar, não é possível alterar.
+          </p>
+          <div className="modal-acoes">
+            <button type="button" className="secundario" onClick={() => dlg.current?.close()}>Revisar</button>
+            <button type="button" className="primario" onClick={confirmar}>Confirmar</button>
+          </div>
+        </dialog>
+      </>
     )
 
   return (
-    <form className="card" onSubmit={continuar}>
-      <label className="f" htmlFor="cpf">CPF</label>
-      <input
-        id="cpf" type="text" inputMode="numeric" autoComplete="off" autoFocus
-        placeholder="000.000.000-00" value={cpf}
-        onChange={(e) => setCpf(mascara(e.target.value))}
-      />
-      <button disabled={carregando}>{carregando ? 'Validando…' : 'Continuar'}</button>
-      {erro && <p className="msg err">{erro}</p>}
-    </form>
+    <>
+      <Passos atual={0} />
+      <form onSubmit={continuar} noValidate>
+        <h2 className="titulo">Informe seu CPF</h2>
+        <p className="apoio">
+          Usamos o CPF só para liberar o voto e garantir que cada pessoa vote uma vez. Ele não fica ligado à sua escolha.
+        </p>
+        <label className="campo" htmlFor="cpf">CPF</label>
+        <input
+          id="cpf" type="text" inputMode="numeric" autoComplete="off" autoFocus
+          placeholder="000.000.000-00" value={cpf} aria-invalid={!!erro}
+          onChange={(e) => { setCpf(mascara(e.target.value)); if (erro) setErro('') }}
+        />
+        {erro && <p className="msg erro" role="alert">{erro}</p>}
+        <div className="acoes">
+          <button className="primario" disabled={carregando}>{carregando ? 'Validando…' : 'Continuar'}</button>
+        </div>
+      </form>
+    </>
   )
 }
 
@@ -153,30 +245,37 @@ function Apuracao() {
     }
   }
 
+  const maximo = res ? Math.max(1, ...res.itens.map((i) => i.votos)) : 1
+
   return (
-    <section className="card">
+    <>
+      <h2 className="titulo">Apuração</h2>
       <form onSubmit={carregar}>
-        <label className="f" htmlFor="tk">Token de administração</label>
-        <input id="tk" type="password" value={token} onChange={(e) => setToken(e.target.value)} />
-        <button>Apurar</button>
+        <label className="campo" htmlFor="tk">Token de administração</label>
+        <input id="tk" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
+        {erro && <p className="msg erro" role="alert">{erro}</p>}
+        <div className="acoes"><button className="primario">Apurar</button></div>
       </form>
-      {erro && <p className="msg err">{erro}</p>}
+
       {res && (
-        <>
-          <p className="sub" style={{ marginTop: 16 }}>
-            {res.totalVotos} votos registrados · {res.totalVotantes} eleitores
+        <section className="resultado">
+          <p className="totais">
+            <strong>{res.totalVotos}</strong> votos · <strong>{res.totalVotantes}</strong> eleitores
           </p>
-          <table>
-            <thead><tr><th>Candidato</th><th>Votos</th></tr></thead>
-            <tbody>
-              {res.itens.map((i) => (
-                <tr key={i.candidato}><td>{i.candidato}</td><td>{i.votos}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <button className="sec" onClick={carregar}>Atualizar</button>
-        </>
+          <ul>
+            {res.itens.map((i) => (
+              <li key={i.candidato}>
+                <div className="linha">
+                  <span>{i.candidato === BRANCO ? 'Voto em branco' : i.candidato}</span>
+                  <b>{i.votos}</b>
+                </div>
+                <div className="barra"><span style={{ width: `${(i.votos / maximo) * 100}%` }} /></div>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="secundario" onClick={carregar}>Atualizar</button>
+        </section>
       )}
-    </section>
+    </>
   )
 }
