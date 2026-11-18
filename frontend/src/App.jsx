@@ -19,6 +19,9 @@ const embaralha = (lista) => {
   return a
 }
 
+const normaliza = (s = '') =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+
 const iniciais = (nome = '') => {
   const p = nome.trim().split(/\s+/).filter(Boolean)
   if (!p.length) return '?'
@@ -80,9 +83,17 @@ function Votacao() {
   const [escolha, setEscolha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
+  const [busca, setBusca] = useState('')
   const dlg = useRef(null)
 
   const candidatos = useMemo(() => (dados ? embaralha(dados.candidatos) : []), [dados])
+
+  // a busca ignora acentos e maiúsculas; o candidato já marcado nunca some da lista
+  const visiveis = useMemo(() => {
+    const q = normaliza(busca)
+    if (!q) return candidatos
+    return candidatos.filter((c) => c.nome === escolha || normaliza(c.nome).includes(q))
+  }, [candidatos, busca, escolha])
 
   // depois do voto a tela volta ao início sozinha, para o próximo eleitor
   useEffect(() => {
@@ -121,7 +132,7 @@ function Votacao() {
   }
 
   function voltar() {
-    setCpf(''); setDados(null); setEscolha(''); setErro(''); setEtapa('cpf')
+    setCpf(''); setDados(null); setEscolha(''); setBusca(''); setErro(''); setEtapa('cpf')
   }
 
   const rotuloEscolha = escolha === BRANCO ? 'voto em branco' : escolha
@@ -164,7 +175,27 @@ function Votacao() {
             <p>Marque uma opção. Você vota uma única vez.</p>
           </legend>
 
-          {candidatos.map((c) => (
+          {candidatos.length > 5 && (
+            <div className="busca">
+              <input
+                type="search" value={busca} autoComplete="off"
+                placeholder="Buscar candidato pelo nome" aria-label="Buscar candidato pelo nome"
+                onChange={(e) => setBusca(e.target.value)}
+              />
+              {busca && (
+                <button type="button" className="limpar" onClick={() => setBusca('')} aria-label="Limpar busca">×</button>
+              )}
+            </div>
+          )}
+          {busca && (
+            <p className="contagem" aria-live="polite">
+              {visiveis.length === 0
+                ? <>Nenhum candidato encontrado para “{busca}”. <button type="button" className="link" onClick={() => setBusca('')}>Limpar busca</button></>
+                : `Mostrando ${visiveis.length} de ${candidatos.length} candidatos`}
+            </p>
+          )}
+
+          {visiveis.map((c) => (
             <label key={c.nome} className="cand">
               <input type="radio" name="cand" checked={escolha === c.nome} onChange={() => setEscolha(c.nome)} />
               <span className="caixa" aria-hidden="true">
@@ -234,6 +265,7 @@ function Apuracao() {
   const [token, setToken] = useState('')
   const [res, setRes] = useState(null)
   const [erro, setErro] = useState('')
+  const [filtro, setFiltro] = useState('')
 
   async function carregar(e) {
     e?.preventDefault()
@@ -246,6 +278,9 @@ function Apuracao() {
   }
 
   const maximo = res ? Math.max(1, ...res.itens.map((i) => i.votos)) : 1
+  const itens = res
+    ? res.itens.filter((i) => normaliza(i.candidato === BRANCO ? 'voto em branco' : i.candidato).includes(normaliza(filtro)))
+    : []
 
   return (
     <>
@@ -262,8 +297,19 @@ function Apuracao() {
           <p className="totais">
             <strong>{res.totalVotos}</strong> votos · <strong>{res.totalVotantes}</strong> eleitores
           </p>
+          <div className="busca">
+            <input
+              type="search" value={filtro} autoComplete="off"
+              placeholder="Filtrar por nome" aria-label="Filtrar candidatos por nome"
+              onChange={(e) => setFiltro(e.target.value)}
+            />
+            {filtro && (
+              <button type="button" className="limpar" onClick={() => setFiltro('')} aria-label="Limpar filtro">×</button>
+            )}
+          </div>
+          {itens.length === 0 && <p className="contagem">Nenhum candidato encontrado para “{filtro}”.</p>}
           <ul>
-            {res.itens.map((i) => (
+            {itens.map((i) => (
               <li key={i.candidato}>
                 <div className="linha">
                   <span>{i.candidato === BRANCO ? 'Voto em branco' : i.candidato}</span>
