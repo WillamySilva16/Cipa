@@ -38,7 +38,9 @@ public class VotacaoController {
     }
 
     @GetMapping("/admin/apuracao")
-    public ApuracaoResponse apuracao(@RequestHeader(value = "X-Admin-Token", defaultValue = "") String token) throws IOException {
+    public ApuracaoResponse apuracao(@RequestHeader(value = "X-Admin-Token", defaultValue = "") String token,
+                                     HttpServletRequest http) throws IOException {
+        limita(http);
         boolean ok = !adminToken.isBlank() && MessageDigest.isEqual(
                 adminToken.getBytes(StandardCharsets.UTF_8), token.getBytes(StandardCharsets.UTF_8));
         if (!ok) throw new RegraException(401, "Token inválido.");

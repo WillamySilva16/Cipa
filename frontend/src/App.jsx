@@ -72,6 +72,11 @@ export default function App() {
         </div>
       </header>
       <main className="cartao">{rota === '#apuracao' ? <Apuracao /> : <Votacao />}</main>
+      {rota !== '#apuracao' && (
+        <footer className="rodape">
+          <a href="#apuracao">Administração</a>
+        </footer>
+      )}
     </>
   )
 }
@@ -271,24 +276,28 @@ function Apuracao() {
   const [res, setRes] = useState(null)
   const [erro, setErro] = useState('')
   const [filtro, setFiltro] = useState('')
+  const [atualizado, setAtualizado] = useState(null)
 
   async function carregar(e) {
     e?.preventDefault()
     setErro('')
     try {
       setRes(await apuracao(token))
+      setAtualizado(new Date())
     } catch (err) {
       setRes(null); setErro(err.message)
     }
   }
 
   const maximo = res ? Math.max(1, ...res.itens.map((i) => i.votos)) : 1
+  const pct = (v) => (res && res.totalVotos ? Math.round((v / res.totalVotos) * 100) : 0)
   const itens = res
     ? res.itens.filter((i) => normaliza(i.candidato === BRANCO ? 'voto em branco' : i.candidato).includes(normaliza(filtro)))
     : []
 
   return (
     <>
+      <a className="voltar" href="#">← Voltar para a votação</a>
       <h2 className="titulo">Apuração</h2>
       <form onSubmit={carregar}>
         <label className="campo" htmlFor="tk">Token de administração</label>
@@ -302,6 +311,11 @@ function Apuracao() {
           <p className="totais">
             <strong>{res.totalVotos}</strong> votos · <strong>{res.totalVotantes}</strong> eleitores
           </p>
+          {atualizado && (
+            <p className="atualizado">
+              Atualizado às {atualizado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>
+          )}
           <div className="busca">
             <input
               type="search" value={filtro} autoComplete="off"
@@ -318,7 +332,7 @@ function Apuracao() {
               <li key={i.candidato}>
                 <div className="linha">
                   <span>{i.candidato === BRANCO ? 'Voto em branco' : i.candidato}</span>
-                  <b>{i.votos}</b>
+                  <b>{i.votos} <small>({pct(i.votos)}%)</small></b>
                 </div>
                 <div className="barra"><span style={{ width: `${(i.votos / maximo) * 100}%` }} /></div>
               </li>
