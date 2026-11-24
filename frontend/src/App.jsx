@@ -445,22 +445,40 @@ function Apuracao() {
   const [atualizado, setAtualizado] = useState(null)
   const [carregando, setCarregando] = useState(false)
   const [baixando, setBaixando] = useState(false)
+  const [auto, setAuto] = useState(true)           // atualiza sozinho para acompanhar quem está votando
+  const [novos, setNovos] = useState(() => new Set())
+  const vistos = useRef(null)
 
-  async function carregar(e) {
+  async function carregar(e, silencioso = false) {
     e?.preventDefault()
-    setErro('')
-    setCarregando(true)
+    if (!silencioso) { setErro(''); setCarregando(true) }
     const [placar, quem] = await Promise.allSettled([apuracao(token), listarVotantes(token)])
     if (quem.status === 'rejected') {
       setRes(null); setLista(null); setErro(quem.reason.message)
     } else {
+      // quem acabou de votar fica destacado por alguns segundos
+      const atuais = new Set(quem.value.map((v) => v.protocolo))
+      if (vistos.current) {
+        const recentes = quem.value.filter((v) => !vistos.current.has(v.protocolo)).map((v) => v.protocolo)
+        if (recentes.length) {
+          setNovos(new Set(recentes))
+          setTimeout(() => setNovos(new Set()), 8000)
+        }
+      }
+      vistos.current = atuais
       setLista(quem.value)
       if (placar.status === 'fulfilled') { setRes(placar.value); setAviso('') }
       else { setRes(null); setAviso(placar.reason.message) }
       setAtualizado(new Date())
     }
-    setCarregando(false)
+    if (!silencioso) setCarregando(false)
   }
+
+  useEffect(() => {
+    if (!auto || lista === null) return
+    const t = setInterval(() => carregar(undefined, true), 20000)
+    return () => clearInterval(t)
+  }, [auto, lista === null, token])
 
   async function exportar() {
     setErro('')
@@ -518,11 +536,17 @@ function Apuracao() {
               <Baixar /> {baixando ? 'Gerando…' : 'Baixar Excel'}
             </button>
           </div>
-          {atualizado && (
-            <p className="atualizado">
-              Atualizado às {atualizado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </p>
-          )}
+          <div className="atualiza">
+            {atualizado && (
+              <p className="atualizado">
+                Atualizado às {atualizado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </p>
+            )}
+            <label className="auto">
+              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+              Atualizar sozinho a cada 20 s
+            </label>
+          </div>
 
           {aba === 'resultado' && (
             <div role="tabpanel">
@@ -583,7 +607,7 @@ function Apuracao() {
               {lista.length > 0 && pessoas.length === 0 && <p className="contagem">Nenhum eleitor encontrado para “{buscaPessoa}”.</p>}
               <ul className="votantes">
                 {pessoas.slice(0, limite).map((v, i) => (
-                  <li key={v.protocolo || i}>
+                  <li key={v.protocolo || i} className={novos.has(v.protocolo) ? 'novo' : ''}>
                     <div className="votante-nome">
                       <b>{v.nome || 'Sem nome registrado'}</b>
                       <small>{v.cargo || '—'}</small>
