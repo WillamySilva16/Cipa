@@ -13,7 +13,13 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 @Service
@@ -22,6 +28,9 @@ public class VotacaoService {
     private static final String AMBIGUO = "*";
     private static final Duration TTL_COLABORADORES = Duration.ofMinutes(10);
     private static final Duration TTL_CANDIDATOS = Duration.ofMinutes(2);
+    private static final ZoneId ZONA = ZoneId.of("America/Sao_Paulo");
+    private static final DateTimeFormatter FORMATO_HUMANO = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm");
+    private static final String ALFABETO = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // sem 0, 1, I, L e O, que se confundem
 
     /** porCpf: CPF (11 dígitos) -> pessoa. reParaCpf: RE -> CPF dono do RE, ou AMBIGUO se o RE repete em empresas diferentes. */
     private record Base(Map<String, Colaborador> porCpf, Map<String, String> reParaCpf) {}
@@ -31,6 +40,8 @@ public class VotacaoService {
     private final VotoRepository votos;
     private final String colabId, colabRange, candId, candRange, pepper;
     private final int colCpf, colCpfAlt, colNome, colCargo, colRe;
+    private final Instant encerraEm;   // opcional: a votação fecha e a apuração só abre depois desta hora
+    private final SecureRandom aleatorio = new SecureRandom();
 
     private volatile Base cacheBase = new Base(Map.of(), Map.of());
     private volatile long colabEm = 0;
@@ -47,11 +58,50 @@ public class VotacaoService {
                           @Value("${cipa.colaboradores.col-re}") int colRe,
                           @Value("${cipa.candidatos.id}") String candId,
                           @Value("${cipa.candidatos.range}") String candRange,
-                          @Value("${cipa.pepper}") String pepper) {
+                          @Value("${cipa.pepper}") String pepper,
+                          @Value("${cipa.encerra-em}") String encerraEm) {
         this.sheets = sheets; this.votantes = votantes; this.votos = votos;
         this.colabId = colabId; this.colabRange = colabRange; this.candId = candId; this.candRange = candRange;
         this.colCpf = colCpf; this.colCpfAlt = colCpfAlt; this.colNome = colNome; this.colCargo = colCargo; this.colRe = colRe;
         this.pepper = pepper;
+        this.encerraEm = lerData(encerraEm);
+    }
+
+    private static Instant lerData(String texto) {
+        if (texto == null || texto.isBlank()) return null;
+        try {
+            return OffsetDateTime.parse(texto.trim()).toInstant();
+        } catch (DateTimeParseException e) {
+            throw new IllegalStateException("VOTACAO_ENCERRA_EM inválida. Use o formato 2026-12-05T18:00:00-03:00", e);
+        }
+    }
+
+    private static String texto(Instant i) {
+        return DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(i.atZone(ZONA));
+    }
+
+    private void exigeVotacaoAberta() {
+        if (encerraEm != null && Instant.now().isAfter(encerraEm)) throw new RegraException(403, "A votação foi encerrada.");
+    }
+
+    /** Com a hora de encerramento definida, ninguém vê o placar parcial: isso evitaria descobrir o voto de alguém comparando placar e lista de quem votou. */
+    private void exigeApuracaoLiberada() {
+        if (encerraEm != null && Instant.now().isBefore(encerraEm))
+            throw new RegraException(403, "A apuração só fica disponível depois do encerramento da votação, em "
+                    + FORMATO_HUMANO.format(encerraEm.atZone(ZONA)) + ".");
+    }
+
+    private String novoProtocolo() {
+        for (int tentativa = 0; tentativa < 10; tentativa++) {
+            StringBuilder sb = new StringBuilder("CIPA-");
+            for (int i = 0; i < 8; i++) {
+                if (i == 4) sb.append('-');
+                sb.append(ALFABETO.charAt(aleatorio.nextInt(ALFABETO.length())));
+            }
+            String protocolo = sb.toString();
+            if (!votantes.existsByProtocolo(protocolo)) return protocolo;
+        }
+        throw new IllegalStateException("Não foi possível gerar o protocolo do comprovante.");
     }
 
     /* ---------- planilhas (com cache curto) ---------- */
@@ -135,6 +185,7 @@ public class VotacaoService {
     }
 
     public ValidarResponse validar(String entrada) throws IOException {
+        exigeVotacaoAberta();
         Base b = base();
         String cpf = resolverCpf(entrada, b);
         Colaborador c = b.porCpf().get(cpf);
@@ -143,26 +194,41 @@ public class VotacaoService {
     }
 
     @Transactional
-    public void votar(String entrada, String candidato) throws IOException {
-        String cpf = resolverCpf(entrada, base());
+    public Comprovante votar(String entrada, String candidato) throws IOException {
+        exigeVotacaoAberta();
+        Base b = base();
+        String cpf = resolverCpf(entrada, b);
+        Colaborador c = b.porCpf().get(cpf);
         boolean permitido = BRANCO.equals(candidato)
-                || candidatos().stream().anyMatch(c -> c.nome().equals(candidato));
+                || candidatos().stream().anyMatch(x -> x.nome().equals(candidato));
         if (!permitido) throw new RegraException(400, "Candidato inválido.");
+
+        Votante v = new Votante(hash(cpf), novoProtocolo(), c.nome(), c.cargo());
         try {
-            votantes.saveAndFlush(new Votante(hash(cpf)));   // a constraint única barra voto duplo
+            votantes.saveAndFlush(v);   // a constraint única barra voto duplo
         } catch (DataIntegrityViolationException e) {
             throw new RegraException(409, "Você já registrou o voto.");
         }
-        votos.save(new Voto(candidato));
+        votos.save(new Voto(candidato));   // sem nenhuma referência ao votante
+        return new Comprovante(v.getProtocolo(), v.getNome(), v.getCargo(), texto(v.getVotadoEm()));
+    }
+
+    /** Quem votou e quando. Nunca em quem: a escolha não é guardada junto da pessoa. */
+    public List<VotanteItem> listarVotantes() {
+        return votantes.findAllByOrderByVotadoEmAsc().stream()
+                .map(v -> new VotanteItem(v.getProtocolo(), v.getNome(), v.getCargo(), texto(v.getVotadoEm())))
+                .toList();
     }
 
     public ApuracaoResponse apuracao() throws IOException {
+        exigeApuracaoLiberada();
+        Map<String, String> funcoes = new HashMap<>();
         Map<String, Long> m = new LinkedHashMap<>();
-        candidatos().forEach(c -> m.put(c.nome(), 0L));
+        for (Candidato c : candidatos()) { funcoes.put(c.nome(), c.funcao()); m.put(c.nome(), 0L); }
         m.put(BRANCO, 0L);
         for (Object[] row : votos.contarPorCandidato()) m.merge((String) row[0], (Long) row[1], Long::sum);
         List<ApuracaoItem> itens = m.entrySet().stream()
-                .map(e -> new ApuracaoItem(e.getKey(), e.getValue()))
+                .map(e -> new ApuracaoItem(e.getKey(), funcoes.getOrDefault(e.getKey(), ""), e.getValue()))
                 .sorted(Comparator.comparingLong(ApuracaoItem::votos).reversed()).toList();
         return new ApuracaoResponse(votantes.count(), votos.count(), itens);
     }

@@ -12,6 +12,10 @@ const json = (corpo) => ({
   body: JSON.stringify(corpo),
 })
 
+const admin = (token) => ({ headers: { 'X-Admin-Token': token } })
+
 export const validarCpf = (cpf) => chamar('/api/validar', json({ cpf }))
+/** Devolve o comprovante (protocolo, nome, cargo e hora). Nunca traz o candidato. */
 export const registrarVoto = (cpf, candidato) => chamar('/api/votos', json({ cpf, candidato }))
-export const apuracao = (token) => chamar('/api/admin/apuracao', { headers: { 'X-Admin-Token': token } })
+export const apuracao = (token) => chamar('/api/admin/apuracao', admin(token))
+export const votantes = (token) => chamar('/api/admin/votantes', admin(token))

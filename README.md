@@ -11,6 +11,7 @@ Valida o CPF ou o RE na planilha de colaboradores (aba COLABORADORES_HCM), lista
 | `CPF_PEPPER` | Texto secreto longo; entra no hash do CPF. Não troque depois de abrir a votação. |
 | `ADMIN_TOKEN` | Senha da tela de apuração (`/#apuracao`). |
 | `COLABORADORES_SHEET_ID`, `COLABORADORES_RANGE` | Opcionais. Padrão: aba `COLABORADORES_HCM`, colunas A:H (CPF_AJUSTADO, CPF, NOME, CARGO). Ajuste a posição com `COL_CPF`, `COL_CPF_ALT`, `COL_NOME`, `COL_RE`, `COL_CARGO` (a partir do 0). |
+| `VOTACAO_ENCERRA_EM` | Opcional. Data e hora de encerramento com fuso, ex.: `2026-12-05T18:00:00-03:00`. Depois dela a votação fecha; antes dela a apuração (placar) fica bloqueada, mas a lista de quem votou continua visível. |
 | `CANDIDATOS_SHEET_ID`, `CANDIDATOS_RANGE` | Opcionais. Padrão: base de candidatos, `'Página1'!A2:B`. |
 
 ## Rodar local
@@ -25,9 +26,15 @@ Com 9 dígitos ou mais o número é tratado como CPF; com menos, como RE. O voto
 
 ## Rotas
 - `POST /api/validar` `{cpf}` (o campo aceita CPF ou RE) → nome, cargo e candidatos
-- `POST /api/votos` `{cpf, candidato}` → 204
-- `GET /api/admin/apuracao` (header `X-Admin-Token`) → contagem
-- `/#apuracao` → tela de apuração
+- `POST /api/votos` `{cpf, candidato}` → comprovante `{protocolo, nome, cargo, votadoEm}` (nunca traz o candidato)
+- `GET /api/admin/apuracao` (header `X-Admin-Token`) → total de votos por candidato
+- `GET /api/admin/votantes` (header `X-Admin-Token`) → quem votou: protocolo, nome, cargo e hora (sem a escolha)
+- `/#apuracao` → administração: resultado, quem votou, conferência de protocolo e botão **Baixar Excel** (abas Resumo, Apuração e Participação)
 
-## Sigilo
-`votantes` guarda só o hash (HMAC-SHA256) do CPF e a hora. `votos` guarda só o candidato, sem CPF e sem hora.
+## Sigilo do voto
+A NR-5 exige voto secreto. Por isso o sistema guarda duas coisas que **não se ligam**:
+- `votantes`: hash do CPF, protocolo, nome, cargo e hora de quem votou;
+- `votos`: só o candidato escolhido, sem CPF, sem nome e sem hora. O id é sorteado, para a ordem dos votos não permitir casar um voto com a lista de quem votou.
+
+O comprovante prova a participação, mas não mostra o candidato. Não existe (nem deve existir) uma tela ou planilha de "quem votou em quem".
+Para evitar descobrir um voto comparando o placar com a lista de quem votou em tempo real, defina `VOTACAO_ENCERRA_EM`: antes dessa hora a apuração fica bloqueada.

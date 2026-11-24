@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { validarCpf, registrarVoto, apuracao } from './api.js'
+import { validarCpf, registrarVoto, apuracao, votantes as listarVotantes } from './api.js'
+import { baixarExcel } from './exportar.js'
 import { LOGO_RS, LOGO_RS_LARGURA, LOGO_RS_ALTURA } from './logo.js'
 
 const BRANCO = 'VOTO EM BRANCO'
-const SEGUNDOS_RESET = 6
+const SEGUNDOS_RESET = 60
 const ESCALA_LOGO = 0.6
 
 // RE (até 8 dígitos) aparece como foi digitado; a partir de 9 dígitos é CPF e ganha a máscara
@@ -45,6 +46,11 @@ const Seta = () => <Icone><path d="M12 4l-6 6 6 6" /></Icone>
 const Check = () => <Icone><path d="M4 10.5l4 4 8-9" /></Icone>
 const Cadeado = () => <Icone><rect x="4" y="9" width="12" height="8" rx="2" /><path d="M7 9V6.5a3 3 0 0 1 6 0V9" /></Icone>
 const Fechar = () => <Icone><path d="M5 5l10 10M15 5L5 15" /></Icone>
+const Imprimir = () => <Icone><path d="M6 8V3h8v5M6 14H4.5A1.5 1.5 0 0 1 3 12.5v-3A1.5 1.5 0 0 1 4.5 8h11A1.5 1.5 0 0 1 17 9.5v3a1.5 1.5 0 0 1-1.5 1.5H14" /><rect x="6" y="12" width="8" height="5" rx="1" /></Icone>
+const Baixar = () => <Icone><path d="M10 3v9m0 0l-3.5-3.5M10 12l3.5-3.5M4 15v1.5h12V15" /></Icone>
+
+const quando = (iso) =>
+  iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'America/Sao_Paulo' }) : '—'
 
 /* anéis vazados da marca RS, como na arte da campanha */
 function Aneis() {
@@ -138,6 +144,7 @@ function Votacao() {
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
   const [busca, setBusca] = useState('')
+  const [comprovante, setComprovante] = useState(null)
   const dlg = useRef(null)
   const limparAoVoltar = useRef(false)
 
@@ -200,7 +207,7 @@ function Votacao() {
     setErro('')
     setCarregando(true)
     try {
-      await registrarVoto(cpf, escolha)
+      setComprovante(await registrarVoto(cpf, escolha))
       window.history.replaceState({ etapa: 'fim' }, '')
       setEtapa('fim')
     } catch (err) {
@@ -229,12 +236,36 @@ function Votacao() {
             <path d="M24 41l11 11 22-24" />
           </svg>
           <h2>Voto registrado!</h2>
-          <p>Obrigado por participar da eleição da CIPA. Você já pode fechar esta página.</p>
+          <p>Obrigado por participar da eleição da CIPA. Guarde seu comprovante.</p>
+
+          {comprovante && (
+            <article className="comprovante" aria-label="Comprovante de votação">
+              <header>
+                <strong>Comprovante de votação</strong>
+                <span>Eleição da CIPA 2026/2027 · RS</span>
+              </header>
+              <dl>
+                <div><dt>Protocolo</dt><dd className="protocolo">{comprovante.protocolo}</dd></div>
+                <div><dt>Eleitor</dt><dd>{comprovante.nome}</dd></div>
+                <div><dt>Cargo</dt><dd>{comprovante.cargo || '—'}</dd></div>
+                <div><dt>Data e hora</dt><dd>{quando(comprovante.votadoEm)}</dd></div>
+              </dl>
+              <p className="comp-nota">
+                Este comprovante confirma que você votou. Ele não mostra em quem você votou: o voto é secreto.
+              </p>
+            </article>
+          )}
+
+          <div className="fim-acoes">
+            <button type="button" className="secundario" onClick={() => window.print()}>
+              <Imprimir /> Imprimir ou salvar em PDF
+            </button>
+            <button type="button" className="primario" onClick={() => window.location.reload()}>Concluir</button>
+          </div>
           <div className="reset" aria-hidden="true">
             <span style={{ animationDuration: `${SEGUNDOS_RESET}s` }} />
           </div>
-          <small>A tela volta ao início em {SEGUNDOS_RESET} segundos.</small>
-          <button type="button" className="link" onClick={() => window.location.reload()}>Voltar ao início agora</button>
+          <small>Por segurança, esta tela volta ao início em {SEGUNDOS_RESET} segundos.</small>
         </section>
       </div>
     )
@@ -403,23 +434,43 @@ function Votacao() {
 
 function Apuracao() {
   const [token, setToken] = useState('')
-  const [res, setRes] = useState(null)
+  const [res, setRes] = useState(null)         // placar (pode estar bloqueado até o encerramento)
+  const [lista, setLista] = useState(null)     // quem votou
+  const [aviso, setAviso] = useState('')
   const [erro, setErro] = useState('')
+  const [aba, setAba] = useState('resultado')
   const [filtro, setFiltro] = useState('')
+  const [buscaPessoa, setBuscaPessoa] = useState('')
+  const [limite, setLimite] = useState(50)
   const [atualizado, setAtualizado] = useState(null)
   const [carregando, setCarregando] = useState(false)
+  const [baixando, setBaixando] = useState(false)
 
   async function carregar(e) {
     e?.preventDefault()
     setErro('')
     setCarregando(true)
-    try {
-      setRes(await apuracao(token))
+    const [placar, quem] = await Promise.allSettled([apuracao(token), listarVotantes(token)])
+    if (quem.status === 'rejected') {
+      setRes(null); setLista(null); setErro(quem.reason.message)
+    } else {
+      setLista(quem.value)
+      if (placar.status === 'fulfilled') { setRes(placar.value); setAviso('') }
+      else { setRes(null); setAviso(placar.reason.message) }
       setAtualizado(new Date())
-    } catch (err) {
-      setRes(null); setErro(err.message)
+    }
+    setCarregando(false)
+  }
+
+  async function exportar() {
+    setErro('')
+    setBaixando(true)
+    try {
+      await baixarExcel(res, lista)
+    } catch {
+      setErro('Não foi possível gerar o Excel. Tente de novo.')
     } finally {
-      setCarregando(false)
+      setBaixando(false)
     }
   }
 
@@ -428,12 +479,17 @@ function Apuracao() {
   const itens = res
     ? res.itens.filter((i) => normaliza(i.candidato === BRANCO ? 'voto em branco' : i.candidato).includes(normaliza(filtro)))
     : []
+  const q = normaliza(buscaPessoa)
+  const pessoas = lista
+    ? [...lista].reverse().filter((v) => !q || normaliza(`${v.nome || ''} ${v.cargo || ''} ${v.protocolo || ''}`).includes(q))
+    : []
+  const carregado = lista !== null
 
   return (
     <div className="etapa admin">
       <a className="voltar" href="#"><Seta /> Voltar para a votação</a>
-      <h2 className="titulo">Apuração</h2>
-      <p className="apoio">Acompanhe os votos por candidato. Só quem tem o token de administração vê esta tela.</p>
+      <h2 className="titulo">Administração da eleição</h2>
+      <p className="apoio">Acompanhe os votos por candidato e quem já votou. Só quem tem o token de administração vê esta tela.</p>
 
       <form className="form-admin" onSubmit={carregar}>
         <div className="form-admin-campo">
@@ -442,48 +498,110 @@ function Apuracao() {
         </div>
         <button className="primario" disabled={carregando || !token}>
           {carregando && <span className="giro" aria-hidden="true" />}
-          {carregando ? 'Apurando…' : 'Apurar'}
+          {carregando ? 'Carregando…' : carregado ? 'Atualizar' : 'Entrar'}
         </button>
       </form>
       {erro && <p className="msg erro" role="alert">{erro}</p>}
 
-      {res && (
+      {carregado && (
         <section className="resultado">
-          <div className="stats">
-            <div className="stat"><span>Votos registrados</span><strong>{res.totalVotos}</strong></div>
-            <div className="stat"><span>Eleitores que votaram</span><strong>{res.totalVotantes}</strong></div>
+          <div className="resultado-barra">
+            <div className="abas" role="tablist" aria-label="Seções da administração">
+              <button type="button" role="tab" aria-selected={aba === 'resultado'} className={aba === 'resultado' ? 'ativa' : ''} onClick={() => setAba('resultado')}>
+                Resultado
+              </button>
+              <button type="button" role="tab" aria-selected={aba === 'quem'} className={aba === 'quem' ? 'ativa' : ''} onClick={() => setAba('quem')}>
+                Quem votou <span className="contador">{lista.length}</span>
+              </button>
+            </div>
+            <button type="button" className="secundario baixar" onClick={exportar} disabled={baixando}>
+              <Baixar /> {baixando ? 'Gerando…' : 'Baixar Excel'}
+            </button>
           </div>
-          <div className="resultado-topo">
-            {atualizado && (
-              <p className="atualizado">
-                Atualizado às {atualizado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </p>
-            )}
-            <button type="button" className="link" onClick={carregar} disabled={carregando}>Atualizar</button>
-          </div>
+          {atualizado && (
+            <p className="atualizado">
+              Atualizado às {atualizado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>
+          )}
 
-          <div className="busca">
-            <input
-              type="search" value={filtro} autoComplete="off"
-              placeholder="Filtrar por nome" aria-label="Filtrar candidatos por nome"
-              onChange={(e) => setFiltro(e.target.value)}
-            />
-            {filtro && (
-              <button type="button" className="limpar" onClick={() => setFiltro('')} aria-label="Limpar filtro"><Fechar /></button>
-            )}
-          </div>
-          {itens.length === 0 && <p className="contagem">Nenhum candidato encontrado para “{filtro}”.</p>}
-          <ul className="ranking">
-            {itens.map((i) => (
-              <li key={i.candidato} className={i.votos === maximo && i.votos > 0 ? 'lider' : ''}>
-                <div className="linha">
-                  <span>{i.candidato === BRANCO ? 'Voto em branco' : i.candidato}</span>
-                  <b>{i.votos} <small>({pct(i.votos)}%)</small></b>
-                </div>
-                <div className="barra"><span style={{ width: `${(i.votos / maximo) * 100}%` }} /></div>
-              </li>
-            ))}
-          </ul>
+          {aba === 'resultado' && (
+            <div role="tabpanel">
+              {aviso && <p className="aviso">{aviso}</p>}
+              {res && (
+                <>
+                  <div className="stats">
+                    <div className="stat"><span>Votos registrados</span><strong>{res.totalVotos}</strong></div>
+                    <div className="stat"><span>Eleitores que votaram</span><strong>{res.totalVotantes}</strong></div>
+                  </div>
+                  <div className="busca">
+                    <input
+                      type="search" value={filtro} autoComplete="off"
+                      placeholder="Filtrar por nome" aria-label="Filtrar candidatos por nome"
+                      onChange={(e) => setFiltro(e.target.value)}
+                    />
+                    {filtro && (
+                      <button type="button" className="limpar" onClick={() => setFiltro('')} aria-label="Limpar filtro"><Fechar /></button>
+                    )}
+                  </div>
+                  {itens.length === 0 && <p className="contagem">Nenhum candidato encontrado para “{filtro}”.</p>}
+                  <ul className="ranking">
+                    {itens.map((i) => (
+                      <li key={i.candidato} className={i.votos === maximo && i.votos > 0 ? 'lider' : ''}>
+                        <div className="linha">
+                          <span>{i.candidato === BRANCO ? 'Voto em branco' : i.candidato}</span>
+                          <b>{i.votos} <small>({pct(i.votos)}%)</small></b>
+                        </div>
+                        <div className="barra"><span style={{ width: `${(i.votos / maximo) * 100}%` }} /></div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+
+          {aba === 'quem' && (
+            <div role="tabpanel">
+              <p className="nota-sigilo">
+                <Cadeado />
+                <span>
+                  O voto é secreto. O sistema guarda <b>quem votou</b> e <b>quantos votos cada candidato recebeu</b>, mas não liga uma coisa à outra.
+                  Para conferir um comprovante, busque pelo protocolo.
+                </span>
+              </p>
+              <div className="busca">
+                <input
+                  type="search" value={buscaPessoa} autoComplete="off"
+                  placeholder="Buscar por nome, cargo ou protocolo" aria-label="Buscar eleitor"
+                  onChange={(e) => { setBuscaPessoa(e.target.value); setLimite(50) }}
+                />
+                {buscaPessoa && (
+                  <button type="button" className="limpar" onClick={() => setBuscaPessoa('')} aria-label="Limpar busca"><Fechar /></button>
+                )}
+              </div>
+              {lista.length === 0 && <p className="contagem">Ninguém votou ainda.</p>}
+              {lista.length > 0 && pessoas.length === 0 && <p className="contagem">Nenhum eleitor encontrado para “{buscaPessoa}”.</p>}
+              <ul className="votantes">
+                {pessoas.slice(0, limite).map((v, i) => (
+                  <li key={v.protocolo || i}>
+                    <div className="votante-nome">
+                      <b>{v.nome || 'Sem nome registrado'}</b>
+                      <small>{v.cargo || '—'}</small>
+                    </div>
+                    <div className="votante-info">
+                      <span className="protocolo-mini">{v.protocolo || '—'}</span>
+                      <small>{quando(v.votadoEm)}</small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {pessoas.length > limite && (
+                <button type="button" className="secundario" onClick={() => setLimite((l) => l + 50)}>
+                  Mostrar mais ({pessoas.length - limite})
+                </button>
+              )}
+            </div>
+          )}
         </section>
       )}
     </div>

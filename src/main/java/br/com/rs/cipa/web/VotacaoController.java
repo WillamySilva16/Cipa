@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api")
@@ -31,20 +32,30 @@ public class VotacaoController {
     }
 
     @PostMapping("/votos")
-    public ResponseEntity<Void> votar(@RequestBody VotoRequest req, HttpServletRequest http) throws IOException {
+    public Comprovante votar(@RequestBody VotoRequest req, HttpServletRequest http) throws IOException {
         limita(http);
-        service.votar(req.cpf(), req.candidato());
-        return ResponseEntity.noContent().build();
+        return service.votar(req.cpf(), req.candidato());
     }
 
     @GetMapping("/admin/apuracao")
     public ApuracaoResponse apuracao(@RequestHeader(value = "X-Admin-Token", defaultValue = "") String token,
                                      HttpServletRequest http) throws IOException {
+        exigeAdmin(token, http);
+        return service.apuracao();
+    }
+
+    @GetMapping("/admin/votantes")
+    public List<VotanteItem> votantes(@RequestHeader(value = "X-Admin-Token", defaultValue = "") String token,
+                                      HttpServletRequest http) {
+        exigeAdmin(token, http);
+        return service.listarVotantes();
+    }
+
+    private void exigeAdmin(String token, HttpServletRequest http) {
         limita(http);
         boolean ok = !adminToken.isBlank() && MessageDigest.isEqual(
                 adminToken.getBytes(StandardCharsets.UTF_8), token.getBytes(StandardCharsets.UTF_8));
         if (!ok) throw new RegraException(401, "Token inválido.");
-        return service.apuracao();
     }
 
     private void limita(HttpServletRequest http) {

@@ -448,3 +448,58 @@ body:has(.admin) .rodape { max-width: 760px; }
   .selo path { stroke-dashoffset: 0; }
   .logo-rs::before { opacity: 0.7; }
 }
+
+/* ---------- comprovante de votação ---------- */
+.comprovante {
+  max-width: 400px; margin: 22px auto 0; padding: 18px 18px 16px; text-align: left;
+  background: #fff; border: 2px dashed var(--azul-linha); border-radius: 16px;
+}
+.comprovante header { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--linha); }
+.comprovante header strong { font-size: 16px; font-weight: 800; color: var(--tinta); }
+.comprovante header span { font-size: 12.5px; color: var(--suave); }
+.comprovante dl { margin: 0; display: grid; gap: 10px; }
+.comprovante dl div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: baseline; }
+.comprovante dt { font-size: 12.5px; font-weight: 700; color: var(--suave); }
+.comprovante dd { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.comprovante .protocolo { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 17px; font-weight: 800; letter-spacing: 0.06em; color: var(--azul); }
+.comp-nota { margin: 14px 0 0 !important; max-width: none !important; font-size: 12.5px !important; color: var(--suave) !important; }
+.fim-acoes { display: grid; gap: 10px; max-width: 400px; margin: 20px auto 0; }
+.fim-acoes .secundario { margin-top: 0; }
+
+/* ---------- administração: abas, lista de quem votou ---------- */
+.resultado-barra { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.abas { display: inline-flex; padding: 4px; gap: 4px; background: var(--azul-claro); border-radius: 12px; }
+.abas button {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--suave); font-size: 14.5px; font-weight: 700;
+}
+.abas button.ativa { background: #fff; color: var(--azul); box-shadow: 0 2px 8px -3px rgba(9, 33, 74, 0.35); }
+.contador { padding: 1px 8px; border-radius: 999px; background: var(--azul); color: #fff; font-size: 12px; font-weight: 800; }
+.secundario.baixar { width: auto; min-height: 44px; margin-top: 0; padding: 0 16px; font-size: 14.5px; }
+.secundario.baixar svg { width: 17px; height: 17px; }
+.resultado > .atualizado { margin: 12px 0 14px; }
+.aviso { padding: 14px 16px; margin-bottom: 14px; background: #fff7e0; border: 1px solid #f0d78a; border-radius: 12px; color: #6b4e00; font-size: 14.5px; font-weight: 600; }
+.nota-sigilo { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; padding: 12px 14px; background: var(--azul-claro); border-radius: 12px; color: var(--texto); font-size: 14px; }
+.nota-sigilo svg { width: 18px; height: 18px; flex: none; margin-top: 2px; color: var(--azul); }
+.votantes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; }
+.votantes li { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 2px; border-bottom: 1px solid var(--linha); }
+.votante-nome, .votante-info { display: flex; flex-direction: column; min-width: 0; }
+.votante-nome b { font-size: 15px; overflow-wrap: anywhere; }
+.votante-nome small, .votante-info small { color: var(--suave); font-size: 12.5px; }
+.votante-info { align-items: flex-end; flex: none; }
+.protocolo-mini { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; color: var(--azul); background: var(--azul-claro); padding: 2px 8px; border-radius: 6px; }
+@media (max-width: 560px) {
+  .votantes li { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .votante-info { align-items: flex-start; flex-direction: row; gap: 10px; align-items: center; }
+  .secundario.baixar { width: 100%; }
+}
+.resultado .stats { margin-top: 4px; }
+
+/* ---------- impressão do comprovante ---------- */
+@media print {
+  body { background: #fff; }
+  .topo, .rodape, .passos, .fim-acoes, .fim > .reset, .fim > small, .fim > .selo, .fim > h2, .fim > p { display: none !important; }
+  .cartao { margin: 0; padding: 0; max-width: none; border: 0; box-shadow: none; }
+  .comprovante { margin: 0 auto; border: 2px solid #09214a; }
+  .etapa, .comprovante { animation: none !important; }
+}
