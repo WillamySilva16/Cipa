@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { validarCpf, registrarVoto, apuracao } from './api.js'
+import { LOGO_RS, LOGO_RS_LARGURA, LOGO_RS_ALTURA } from './logo.js'
 
 const BRANCO = 'VOTO EM BRANCO'
 const SEGUNDOS_RESET = 6
@@ -28,17 +29,6 @@ const iniciais = (nome = '') => {
   return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase()
 }
 
-function Urna() {
-  return (
-    <svg className="urna" viewBox="0 0 48 48" aria-hidden="true">
-      <rect x="6" y="20" width="36" height="22" rx="4" fill="#F5B700" />
-      <rect x="14" y="26" width="20" height="4" rx="2" fill="#0A2347" />
-      <path d="M18 6h12a2 2 0 0 1 2 2v9H16V8a2 2 0 0 1 2-2z" fill="#fff" />
-      <path d="M20 11l3 3 5-6" fill="none" stroke="#1558D6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function Passos({ atual }) {
   const itens = ['Identificação', 'Voto', 'Concluído']
   return (
@@ -64,7 +54,10 @@ export default function App() {
     <>
       <header className="topo">
         <div className="topo-in">
-          <Urna />
+          <img
+            className="logo-rs" src={LOGO_RS} alt="RS Terceirização"
+            width={LOGO_RS_LARGURA / 2} height={LOGO_RS_ALTURA / 2}
+          />
           <div>
             <h1>Eleição da CIPA</h1>
             <p>Seu voto é secreto.</p>

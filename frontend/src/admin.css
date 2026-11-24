@@ -6,3 +6,7 @@
 .voltar:hover { text-decoration: underline; }
 .atualizado { margin-top: 2px; color: var(--suave); font-size: 13px; }
 .linha b small { color: var(--suave); font-weight: 600; font-size: 13px; }
+
+/* ---------- cabeçalho com o logo da RS ---------- */
+.topo-in { flex-direction: column; align-items: flex-start; gap: 18px; }
+.logo-rs { display: block; width: auto; height: 52px; }
