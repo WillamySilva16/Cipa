@@ -1,7 +1,7 @@
 # Portal de votação CIPA
 
 Spring Boot (Java 17) + React/Vite, em um único serviço no Railway.
-Valida o CPF na planilha de colaboradores (aba COLABORADORES_HCM), lista os candidatos da planilha "Base de candidatos - CIPA" e grava o voto no Postgres.
+Valida o CPF ou o RE na planilha de colaboradores (aba COLABORADORES_HCM), lista os candidatos da planilha "Base de candidatos - CIPA" e grava o voto no Postgres.
 
 ## Variáveis de ambiente (Railway)
 | Variável | Para quê |
@@ -10,7 +10,7 @@ Valida o CPF na planilha de colaboradores (aba COLABORADORES_HCM), lista os cand
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Preenchidas pelo plugin Postgres do Railway (use "Add Reference" apontando para o Postgres). |
 | `CPF_PEPPER` | Texto secreto longo; entra no hash do CPF. Não troque depois de abrir a votação. |
 | `ADMIN_TOKEN` | Senha da tela de apuração (`/#apuracao`). |
-| `COLABORADORES_SHEET_ID`, `COLABORADORES_RANGE` | Opcionais. Padrão: aba `COLABORADORES_HCM`, colunas A:H (CPF_AJUSTADO, CPF, NOME, CARGO). Ajuste a posição com `COL_CPF`, `COL_CPF_ALT`, `COL_NOME`, `COL_CARGO` (a partir do 0). |
+| `COLABORADORES_SHEET_ID`, `COLABORADORES_RANGE` | Opcionais. Padrão: aba `COLABORADORES_HCM`, colunas A:H (CPF_AJUSTADO, CPF, NOME, CARGO). Ajuste a posição com `COL_CPF`, `COL_CPF_ALT`, `COL_NOME`, `COL_RE`, `COL_CARGO` (a partir do 0). |
 | `CANDIDATOS_SHEET_ID`, `CANDIDATOS_RANGE` | Opcionais. Padrão: base de candidatos, `'Página1'!A2:B`. |
 
 ## Rodar local
@@ -20,8 +20,11 @@ mvn spring-boot:run          # back em :8080
 cd frontend && npm install && npm run dev   # front em :5173 (proxy para /api)
 ```
 
+## CPF ou RE
+Com 9 dígitos ou mais o número é tratado como CPF; com menos, como RE. O voto é sempre barrado pelo hash do CPF da pessoa, então quem vota por RE não consegue votar de novo por CPF. Se o mesmo RE existir em mais de uma empresa da base, o sistema pede o CPF.
+
 ## Rotas
-- `POST /api/validar` `{cpf}` → nome, cargo e candidatos
+- `POST /api/validar` `{cpf}` (o campo aceita CPF ou RE) → nome, cargo e candidatos
 - `POST /api/votos` `{cpf, candidato}` → 204
 - `GET /api/admin/apuracao` (header `X-Admin-Token`) → contagem
 - `/#apuracao` → tela de apuração

@@ -6,11 +6,15 @@ const BRANCO = 'VOTO EM BRANCO'
 const SEGUNDOS_RESET = 6
 const ESCALA_LOGO = 0.6
 
-const mascara = (v) =>
-  v.replace(/\D/g, '').slice(0, 11)
+// RE (até 8 dígitos) aparece como foi digitado; a partir de 9 dígitos é CPF e ganha a máscara
+const mascara = (v) => {
+  const d = v.replace(/\D/g, '').slice(0, 11)
+  if (d.length < 9) return d
+  return d
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
 
 const embaralha = (lista) => {
   const a = [...lista]
@@ -111,7 +115,7 @@ function Votacao() {
   async function continuar(e) {
     e.preventDefault()
     setErro('')
-    if (cpf.replace(/\D/g, '').length < 11) return setErro('Digite os 11 números do CPF.')
+    if (!cpf.replace(/\D/g, '')) return setErro('Digite seu CPF ou RE.')
     setCarregando(true)
     try {
       setDados(await validarCpf(cpf))
@@ -259,14 +263,14 @@ function Votacao() {
     <div className="etapa">
       <Passos atual={0} />
       <form onSubmit={continuar} noValidate>
-        <h2 className="titulo">Informe seu CPF</h2>
+        <h2 className="titulo">Informe seu CPF ou RE</h2>
         <p className="apoio">
-          Usamos o CPF só para liberar o voto e garantir que cada pessoa vote uma vez. Ele não fica ligado à sua escolha.
+          Usamos o CPF ou o RE só para liberar o voto e garantir que cada pessoa vote uma vez. Ele não fica ligado à sua escolha.
         </p>
-        <label className="campo" htmlFor="cpf">CPF</label>
+        <label className="campo" htmlFor="cpf">CPF ou RE</label>
         <input
           id="cpf" type="text" inputMode="numeric" autoComplete="off" autoFocus
-          placeholder="000.000.000-00" value={cpf} aria-invalid={!!erro}
+          placeholder="CPF ou RE" value={cpf} aria-invalid={!!erro}
           onChange={(e) => { setCpf(mascara(e.target.value)); if (erro) setErro('') }}
         />
         {erro && <p className="msg erro" role="alert">{erro}</p>}
