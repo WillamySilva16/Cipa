@@ -4,6 +4,7 @@ import { LOGO_RS, LOGO_RS_LARGURA, LOGO_RS_ALTURA } from './logo.js'
 
 const BRANCO = 'VOTO EM BRANCO'
 const SEGUNDOS_RESET = 6
+const ESCALA_LOGO = 0.6
 
 const mascara = (v) =>
   v.replace(/\D/g, '').slice(0, 11)
@@ -54,10 +55,17 @@ export default function App() {
     <>
       <header className="topo">
         <div className="topo-in">
-          <img
-            className="logo-rs" src={LOGO_RS} alt="RS Terceirização"
-            width={LOGO_RS_LARGURA / 2} height={LOGO_RS_ALTURA / 2}
-          />
+          <span
+            className="logo-rs" role="img" aria-label="RS Terceirização"
+            style={{
+              '--logo': `url("${LOGO_RS}")`,
+              width: Math.round(LOGO_RS_LARGURA * ESCALA_LOGO),
+              height: Math.round(LOGO_RS_ALTURA * ESCALA_LOGO),
+            }}
+          >
+            <img src={LOGO_RS} alt="" />
+            <span className="logo-brilho" aria-hidden="true" />
+          </span>
           <div>
             <h1>Eleição da CIPA</h1>
             <p>Seu voto é secreto.</p>
@@ -137,7 +145,7 @@ function Votacao() {
 
   if (etapa === 'fim')
     return (
-      <>
+      <div className="etapa">
         <Passos atual={3} />
         <section className="fim">
           <svg className="selo" viewBox="0 0 80 80" aria-hidden="true">
@@ -151,12 +159,12 @@ function Votacao() {
           </div>
           <small>A tela volta ao início em {SEGUNDOS_RESET} segundos.</small>
         </section>
-      </>
+      </div>
     )
 
   if (etapa === 'voto')
     return (
-      <>
+      <div className="etapa">
         <Passos atual={1} />
         <div className="eleitor">
           <span className="avatar" aria-hidden="true">{iniciais(dados.nome)}</span>
@@ -194,8 +202,8 @@ function Votacao() {
           )}
 
           <div className="grade">
-            {visiveis.map((c) => (
-              <label key={c.nome} className="cand">
+            {visiveis.map((c, i) => (
+              <label key={c.nome} className="cand" style={{ '--i': Math.min(i, 14) }}>
                 <input type="radio" name="cand" checked={escolha === c.nome} onChange={() => setEscolha(c.nome)} />
                 <span className="cand-topo">
                   <span className="mini" aria-hidden="true">{iniciais(c.nome)}</span>
@@ -223,7 +231,13 @@ function Votacao() {
         {erro && <p className="msg erro" role="alert">{erro}</p>}
 
         <div className="acoes fixa">
+          {escolha && (
+            <p className="marcado">
+              Você marcou: <strong>{rotuloEscolha}</strong>
+            </p>
+          )}
           <button type="button" className="primario" disabled={!escolha || carregando} onClick={() => dlg.current?.showModal()}>
+            {carregando && <span className="giro" aria-hidden="true" />}
             {carregando ? 'Registrando…' : 'Confirmar voto'}
           </button>
         </div>
@@ -238,11 +252,11 @@ function Votacao() {
             <button type="button" className="primario" onClick={confirmar}>Confirmar</button>
           </div>
         </dialog>
-      </>
+      </div>
     )
 
   return (
-    <>
+    <div className="etapa">
       <Passos atual={0} />
       <form onSubmit={continuar} noValidate>
         <h2 className="titulo">Informe seu CPF</h2>
@@ -257,10 +271,13 @@ function Votacao() {
         />
         {erro && <p className="msg erro" role="alert">{erro}</p>}
         <div className="acoes">
-          <button className="primario" disabled={carregando}>{carregando ? 'Validando…' : 'Continuar'}</button>
+          <button className="primario" disabled={carregando}>
+            {carregando && <span className="giro" aria-hidden="true" />}
+            {carregando ? 'Validando…' : 'Continuar'}
+          </button>
         </div>
       </form>
-    </>
+    </div>
   )
 }
 
