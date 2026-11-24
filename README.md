@@ -1,7 +1,7 @@
 # Portal de votação CIPA
 
 Spring Boot (Java 17) + React/Vite, em um único serviço no Railway.
-Valida o CPF na planilha de Admissões, lista os candidatos da planilha "Base de candidatos - CIPA" e grava o voto no Postgres.
+Valida o CPF na planilha de colaboradores (aba COLABORADORES_HCM), lista os candidatos da planilha "Base de candidatos - CIPA" e grava o voto no Postgres.
 
 ## Variáveis de ambiente (Railway)
 | Variável | Para quê |
@@ -10,7 +10,7 @@ Valida o CPF na planilha de Admissões, lista os candidatos da planilha "Base de
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Preenchidas pelo plugin Postgres do Railway (use "Add Reference" apontando para o Postgres). |
 | `CPF_PEPPER` | Texto secreto longo; entra no hash do CPF. Não troque depois de abrir a votação. |
 | `ADMIN_TOKEN` | Senha da tela de apuração (`/#apuracao`). |
-| `ADMISSOES_SHEET_ID`, `ADMISSOES_RANGE` | Opcionais. Padrão: planilha de Admissões, `'ADMISSÕES'!B2:J`. |
+| `COLABORADORES_SHEET_ID`, `COLABORADORES_RANGE` | Opcionais. Padrão: aba `COLABORADORES_HCM`, colunas A:H (CPF_AJUSTADO, CPF, NOME, CARGO). Ajuste a posição com `COL_CPF`, `COL_CPF_ALT`, `COL_NOME`, `COL_CARGO` (a partir do 0). |
 | `CANDIDATOS_SHEET_ID`, `CANDIDATOS_RANGE` | Opcionais. Padrão: base de candidatos, `'Página1'!A2:B`. |
 
 ## Rodar local

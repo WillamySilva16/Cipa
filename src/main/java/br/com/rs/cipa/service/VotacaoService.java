@@ -25,7 +25,8 @@ public class VotacaoService {
     private final SheetsService sheets;
     private final VotanteRepository votantes;
     private final VotoRepository votos;
-    private final String admId, admRange, candId, candRange, pepper;
+    private final String colabId, colabRange, candId, candRange, pepper;
+    private final int colCpf, colCpfAlt, colNome, colCargo;
 
     private volatile Map<String, Colaborador> cacheColab = Map.of();
     private volatile long colabEm = 0;
@@ -33,13 +34,18 @@ public class VotacaoService {
     private volatile long candEm = 0;
 
     public VotacaoService(SheetsService sheets, VotanteRepository votantes, VotoRepository votos,
-                          @Value("${cipa.admissoes.id}") String admId,
-                          @Value("${cipa.admissoes.range}") String admRange,
+                          @Value("${cipa.colaboradores.id}") String colabId,
+                          @Value("${cipa.colaboradores.range}") String colabRange,
+                          @Value("${cipa.colaboradores.col-cpf}") int colCpf,
+                          @Value("${cipa.colaboradores.col-cpf-alt}") int colCpfAlt,
+                          @Value("${cipa.colaboradores.col-nome}") int colNome,
+                          @Value("${cipa.colaboradores.col-cargo}") int colCargo,
                           @Value("${cipa.candidatos.id}") String candId,
                           @Value("${cipa.candidatos.range}") String candRange,
                           @Value("${cipa.pepper}") String pepper) {
         this.sheets = sheets; this.votantes = votantes; this.votos = votos;
-        this.admId = admId; this.admRange = admRange; this.candId = candId; this.candRange = candRange;
+        this.colabId = colabId; this.colabRange = colabRange; this.candId = candId; this.candRange = candRange;
+        this.colCpf = colCpf; this.colCpfAlt = colCpfAlt; this.colNome = colNome; this.colCargo = colCargo;
         this.pepper = pepper;
     }
 
@@ -48,18 +54,26 @@ public class VotacaoService {
     private Map<String, Colaborador> colaboradores() throws IOException {
         if (System.currentTimeMillis() - colabEm > TTL_COLABORADORES.toMillis()) {
             Map<String, Colaborador> m = new HashMap<>();
-            // intervalo B:J => 0 = CPF (B), 5 = NOME (G), 8 = CARGO (J)
-            for (List<Object> r : sheets.values(admId, admRange)) {
-                if (r.isEmpty()) continue;
-                String cpf = CpfUtil.normaliza(r.get(0));
+            // as posições das colunas (a partir do 0 dentro do intervalo) vêm da configuração
+            for (List<Object> r : sheets.values(colabId, colabRange)) {
+                String cpf = cpfDaLinha(r);
                 if (!CpfUtil.valido(cpf)) continue;
-                String nome = r.size() > 5 ? r.get(5).toString().trim() : "";
-                String cargo = r.size() > 8 ? r.get(8).toString().trim() : "";
-                m.putIfAbsent(cpf, new Colaborador(nome, cargo));
+                m.putIfAbsent(cpf, new Colaborador(celula(r, colNome), celula(r, colCargo)));
             }
             cacheColab = m; colabEm = System.currentTimeMillis();
         }
         return cacheColab;
+    }
+
+    private static String celula(List<Object> r, int i) {
+        return i >= 0 && i < r.size() && r.get(i) != null ? r.get(i).toString().trim() : "";
+    }
+
+    /** Usa a coluna principal do CPF e, se ela estiver vazia ou inválida, a alternativa (que pode ter perdido zeros). */
+    private String cpfDaLinha(List<Object> r) {
+        String cpf = CpfUtil.normaliza(celula(r, colCpf));
+        if (CpfUtil.valido(cpf)) return cpf;
+        return CpfUtil.normaliza(celula(r, colCpfAlt));
     }
 
     public List<Candidato> candidatos() throws IOException {
