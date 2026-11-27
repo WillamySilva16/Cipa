@@ -1,4 +1,4 @@
-// Excel da apuração: resumo, total de votos por candidato, lista de quem votou e participação por hora.
+// Excel da apuração: resumo, total de votos por candidato, lista de quem votou, participação por hora e por IP.
 // O voto é secreto: a apuração (candidato e votos) e a participação (quem votou) ficam em abas separadas,
 // e nada nesta planilha liga uma pessoa à sua escolha.
 
@@ -168,6 +168,7 @@ export function montarPlanilha(ExcelJS, apuracao, votantes, geradoEm = new Date(
   wp.columns = [
     { header: 'Nº', key: 'n', width: 7 }, { header: 'Protocolo', key: 'protocolo', width: 18 },
     { header: 'Nome', key: 'nome', width: 44 }, { header: 'Cargo', key: 'cargo', width: 34 },
+    { header: 'IP', key: 'ip', width: 20 },
     { header: 'Data', key: 'data', width: 13 }, { header: 'Hora', key: 'hora', width: 11 },
   ]
   const porHora = new Map()
@@ -176,16 +177,16 @@ export function montarPlanilha(ExcelJS, apuracao, votantes, geradoEm = new Date(
     const chave = `${p.a}-${pad(p.m)}-${pad(p.d)} ${pad(p.h)}`
     porHora.set(chave, (porHora.get(chave) || 0) + 1)
     wp.addRow({
-      n: i + 1, protocolo: v.protocolo || '', nome: v.nome || '', cargo: v.cargo || '',
+      n: i + 1, protocolo: v.protocolo || '', nome: v.nome || '', cargo: v.cargo || '', ip: v.ip || '',
       data: new Date(Date.UTC(p.a, p.m - 1, p.d)), hora: (p.h * 3600 + p.mi * 60 + p.s) / 86400,
     })
   })
-  cabecalho(wp, [3, 4])
-  corpo(wp, [3, 4])
+  cabecalho(wp, [3, 4, 5])
+  corpo(wp, [3, 4, 5])
   wp.eachRow((linha, n) => {
     if (n === 1) return
-    linha.getCell(5).numFmt = 'dd/mm/yyyy'
-    linha.getCell(6).numFmt = 'hh:mm:ss'
+    linha.getCell(6).numFmt = 'dd/mm/yyyy'
+    linha.getCell(7).numFmt = 'hh:mm:ss'
     linha.getCell(2).font = { name: 'Consolas', size: 10.5, bold: true, color: { argb: COR.azul } }
   })
   impressao(wp, false)
@@ -207,6 +208,39 @@ export function montarPlanilha(ExcelJS, apuracao, votantes, geradoEm = new Date(
   corpo(wh)
   wh.eachRow((linha, n) => { if (n > 1) linha.getCell(1).numFmt = 'dd/mm/yyyy' })
   impressao(wh)
+
+  /* ===== Por IP (de onde vieram os votos; só quem votou, nunca em quem) ===== */
+  const wi = wb.addWorksheet('Por IP')
+  wi.columns = [
+    { header: 'IP', key: 'ip', width: 22 }, { header: 'Votos', key: 'qtd', width: 10 },
+    { header: 'Primeiro voto', key: 'primeiro', width: 19 }, { header: 'Último voto', key: 'ultimo', width: 19 },
+    { header: 'Eleitores', key: 'nomes', width: 80 },
+  ]
+  const porIp = new Map()
+  for (const v of lista) {
+    const chave = v.ip || 'Sem IP registrado'
+    const g = porIp.get(chave) || { ip: chave, datas: [], nomes: [] }
+    g.datas.push(new Date(v.votadoEm)); g.nomes.push(v.nome || '')
+    porIp.set(chave, g)
+  }
+  ;[...porIp.values()].sort((a, b) => b.nomes.length - a.nomes.length || a.ip.localeCompare(b.ip)).forEach((g) => {
+    wi.addRow({
+      ip: g.ip, qtd: g.nomes.length,
+      primeiro: relogio(new Date(Math.min(...g.datas))), ultimo: relogio(new Date(Math.max(...g.datas))),
+      nomes: g.nomes.join('; '),
+    })
+  })
+  cabecalho(wi, [1, 5])
+  corpo(wi, [1, 5])
+  wi.eachRow((linha, n) => {
+    if (n === 1) return
+    linha.getCell(3).numFmt = 'dd/mm/yyyy hh:mm:ss'
+    linha.getCell(4).numFmt = 'dd/mm/yyyy hh:mm:ss'
+    linha.getCell(5).alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true }
+    linha.getCell(1).font = { name: 'Consolas', size: 10.5, bold: true, color: { argb: COR.azul } }
+    linha.height = Math.max(21, 15 * Math.ceil(String(linha.getCell(5).value || '').length / 85))
+  })
+  impressao(wi, false)
 
   return wb
 }

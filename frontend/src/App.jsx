@@ -52,6 +52,23 @@ const Baixar = () => <Icone><path d="M10 3v9m0 0l-3.5-3.5M10 12l3.5-3.5M4 15v1.5
 const quando = (iso) =>
   iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'America/Sao_Paulo' }) : '—'
 
+const SEM_IP = 'Sem IP registrado'
+const LIMITE_ATENCAO = 5   // a partir de quantos votos no mesmo IP o destaque muda de cor
+
+/** Agrupa quem votou por IP. É só a lista de participação: nada aqui sabe em quem cada pessoa votou. */
+function agruparPorIp(lista) {
+  const m = new Map()
+  for (const v of lista) {
+    const ip = v.ip || SEM_IP
+    const g = m.get(ip) || { ip, pessoas: [], primeiro: v.votadoEm, ultimo: v.votadoEm }
+    g.pessoas.push(v)
+    if (new Date(v.votadoEm) < new Date(g.primeiro)) g.primeiro = v.votadoEm
+    if (new Date(v.votadoEm) > new Date(g.ultimo)) g.ultimo = v.votadoEm
+    m.set(ip, g)
+  }
+  return [...m.values()].sort((a, b) => b.pessoas.length - a.pessoas.length || a.ip.localeCompare(b.ip))
+}
+
 /* anéis vazados da marca RS, como na arte da campanha */
 function Aneis() {
   const anel = (cx, cy) => (
@@ -427,6 +444,9 @@ function Votacao() {
           <li><Cadeado /> Voto secreto</li>
           <li><Check /> Um voto por pessoa</li>
         </ul>
+        <p className="aviso-ip">
+          Por segurança, registramos o IP do seu acesso junto com a sua participação. Ele nunca é ligado à sua escolha.
+        </p>
       </form>
     </div>
   )
@@ -442,6 +462,8 @@ function Apuracao() {
   const [filtro, setFiltro] = useState('')
   const [buscaPessoa, setBuscaPessoa] = useState('')
   const [limite, setLimite] = useState(50)
+  const [buscaIp, setBuscaIp] = useState('')
+  const [limiteIp, setLimiteIp] = useState(50)
   const [atualizado, setAtualizado] = useState(null)
   const [carregando, setCarregando] = useState(false)
   const [baixando, setBaixando] = useState(false)
@@ -502,6 +524,9 @@ function Apuracao() {
     ? [...lista].reverse().filter((v) => !q || normaliza(`${v.nome || ''} ${v.cargo || ''} ${v.protocolo || ''}`).includes(q))
     : []
   const carregado = lista !== null
+  const grupos = useMemo(() => (lista ? agruparPorIp(lista) : []), [lista])
+  const qi = normaliza(buscaIp)
+  const gruposVisiveis = grupos.filter((g) => !qi || normaliza(`${g.ip} ${g.pessoas.map((p) => p.nome).join(' ')}`).includes(qi))
 
   return (
     <div className="etapa admin">
@@ -530,6 +555,9 @@ function Apuracao() {
               </button>
               <button type="button" role="tab" aria-selected={aba === 'quem'} className={aba === 'quem' ? 'ativa' : ''} onClick={() => setAba('quem')}>
                 Quem votou <span className="contador">{lista.length}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={aba === 'ip'} className={aba === 'ip' ? 'ativa' : ''} onClick={() => setAba('ip')}>
+                Por IP <span className="contador">{grupos.length}</span>
               </button>
             </div>
             <button type="button" className="secundario baixar" onClick={exportar} disabled={baixando}>
@@ -584,6 +612,64 @@ function Apuracao() {
             </div>
           )}
 
+          {aba === 'ip' && (
+            <div role="tabpanel">
+              <p className="nota-sigilo">
+                <Cadeado />
+                <span>
+                  O IP é gravado junto de <b>quem votou</b>, nunca junto do voto. Vários votos no mesmo IP não provam fraude:
+                  a rede da empresa, o Wi-Fi e a operadora do celular compartilham o mesmo IP.
+                </span>
+              </p>
+              <div className="stats">
+                <div className="stat"><span>IPs diferentes</span><strong>{grupos.length}</strong></div>
+                <div className="stat"><span>Maior concentração</span><strong>{grupos.length ? grupos[0].pessoas.length : 0}</strong></div>
+              </div>
+              <div className="busca ip-busca">
+                <input
+                  type="search" value={buscaIp} autoComplete="off"
+                  placeholder="Buscar por IP ou nome" aria-label="Buscar por IP"
+                  onChange={(e) => { setBuscaIp(e.target.value); setLimiteIp(50) }}
+                />
+                {buscaIp && (
+                  <button type="button" className="limpar" onClick={() => setBuscaIp('')} aria-label="Limpar busca"><Fechar /></button>
+                )}
+              </div>
+              {lista.length === 0 && <p className="contagem">Ninguém votou ainda.</p>}
+              {lista.length > 0 && gruposVisiveis.length === 0 && <p className="contagem">Nenhum IP encontrado para “{buscaIp}”.</p>}
+              <ul className="ips">
+                {gruposVisiveis.slice(0, limiteIp).map((g) => (
+                  <li key={g.ip}>
+                    <details>
+                      <summary>
+                        <span className="ip-end">{g.ip}</span>
+                        <span className={`ip-qtd${g.pessoas.length >= LIMITE_ATENCAO ? ' alto' : ''}`}>
+                          {g.pessoas.length} {g.pessoas.length === 1 ? 'voto' : 'votos'}
+                        </span>
+                      </summary>
+                      <div className="ip-detalhe">
+                        <p className="ip-janela">Primeiro voto: {quando(g.primeiro)} · Último: {quando(g.ultimo)}</p>
+                        <ul>
+                          {g.pessoas.map((p, i) => (
+                            <li key={p.protocolo || i}>
+                              <b>{p.nome || 'Sem nome registrado'}</b>
+                              <small>{p.cargo || '—'} · {quando(p.votadoEm)}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+              {gruposVisiveis.length > limiteIp && (
+                <button type="button" className="secundario" onClick={() => setLimiteIp((l) => l + 50)}>
+                  Mostrar mais ({gruposVisiveis.length - limiteIp})
+                </button>
+              )}
+            </div>
+          )}
+
           {aba === 'quem' && (
             <div role="tabpanel">
               <p className="nota-sigilo">
@@ -614,7 +700,7 @@ function Apuracao() {
                     </div>
                     <div className="votante-info">
                       <span className="protocolo-mini">{v.protocolo || '—'}</span>
-                      <small>{quando(v.votadoEm)}</small>
+                      <small>{quando(v.votadoEm)}{v.ip ? ` · IP ${v.ip}` : ''}</small>
                     </div>
                   </li>
                 ))}

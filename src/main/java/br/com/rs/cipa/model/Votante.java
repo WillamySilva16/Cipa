@@ -31,9 +31,14 @@ public class Votante {
     @Column(length = 200)
     private String cargo;
 
+    /** IP de quem votou. Fica aqui, na lista de quem votou, e nunca junto do voto. */
+    @Column(length = 64)
+    private String ip;
+
     protected Votante() {}
 
-    public Votante(String cpfHash, String protocolo, String nome, String cargo) {
+    public Votante(String cpfHash, String protocolo, String nome, String cargo, String ip) {
+        this.ip = ip;
         this.cpfHash = cpfHash;
         this.protocolo = protocolo;
         this.nome = nome;
@@ -43,5 +48,6 @@ public class Votante {
     public String getProtocolo() { return protocolo; }
     public String getNome() { return nome; }
     public String getCargo() { return cargo; }
+    public String getIp() { return ip; }
     public Instant getVotadoEm() { return votadoEm; }
 }

@@ -500,6 +500,29 @@ body:has(.admin) .rodape { max-width: 760px; }
 }
 .resultado .stats { margin-top: 4px; }
 
+/* ---------- administração: por IP ---------- */
+.aviso-ip { margin-top: 14px; color: var(--suave); font-size: 12.5px; }
+.ip-busca { margin-top: 14px; }
+.ips { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.ips > li { border: 1.5px solid var(--linha); border-radius: 12px; background: #fff; overflow: hidden; }
+.ips summary {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; cursor: pointer; list-style: none;
+}
+.ips summary::-webkit-details-marker { display: none; }
+.ips summary::after { content: '▾'; color: var(--suave); margin-left: 4px; transition: transform 0.15s; }
+.ips details[open] summary::after { transform: rotate(180deg); }
+.ips details[open] summary { background: var(--azul-claro); }
+.ip-end { flex: 1; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 14.5px; font-weight: 700; overflow-wrap: anywhere; }
+.ip-qtd { padding: 3px 10px; border-radius: 999px; background: var(--azul-claro); color: var(--azul); font-size: 13px; font-weight: 800; }
+.ip-qtd.alto { background: #fff1d6; color: #8a5a00; }
+.ip-detalhe { padding: 6px 14px 14px; }
+.ip-janela { margin: 8px 0 10px !important; color: var(--suave); font-size: 12.5px; }
+.ip-detalhe ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.ip-detalhe li { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--linha); }
+.ip-detalhe li b { font-size: 14px; overflow-wrap: anywhere; }
+.ip-detalhe li small { color: var(--suave); font-size: 12.5px; }
+
 /* ---------- impressão do comprovante ---------- */
 @media print {
   body { background: #fff; }

@@ -34,7 +34,7 @@ public class VotacaoController {
     @PostMapping("/votos")
     public Comprovante votar(@RequestBody VotoRequest req, HttpServletRequest http) throws IOException {
         limita(http);
-        return service.votar(req.cpf(), req.candidato());
+        return service.votar(req.cpf(), req.candidato(), ClienteIp.de(http));
     }
 
     @GetMapping("/admin/apuracao")
@@ -59,7 +59,7 @@ public class VotacaoController {
     }
 
     private void limita(HttpServletRequest http) {
-        if (!limiter.permite(http.getRemoteAddr()))
+        if (!limiter.permite(ClienteIp.de(http)))
             throw new RegraException(429, "Muitas tentativas. Aguarde um minuto.");
     }
 

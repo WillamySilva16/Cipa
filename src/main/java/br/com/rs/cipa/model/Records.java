@@ -14,8 +14,8 @@ public final class Records {
 
     /** Prova de que a pessoa votou. Nunca traz o candidato escolhido. */
     public record Comprovante(String protocolo, String nome, String cargo, String votadoEm) {}
-    /** Linha da lista de participação: quem votou e quando, sem a escolha. */
-    public record VotanteItem(String protocolo, String nome, String cargo, String votadoEm) {}
+    /** Linha da lista de participação: quem votou, quando e de que IP, sem a escolha. */
+    public record VotanteItem(String protocolo, String nome, String cargo, String votadoEm, String ip) {}
 
     public record ApuracaoItem(String candidato, String funcao, long votos) {}
     public record ApuracaoResponse(long totalVotantes, long totalVotos, List<ApuracaoItem> itens) {}

@@ -194,7 +194,7 @@ public class VotacaoService {
     }
 
     @Transactional
-    public Comprovante votar(String entrada, String candidato) throws IOException {
+    public Comprovante votar(String entrada, String candidato, String ip) throws IOException {
         exigeVotacaoAberta();
         Base b = base();
         String cpf = resolverCpf(entrada, b);
@@ -203,7 +203,7 @@ public class VotacaoService {
                 || candidatos().stream().anyMatch(x -> x.nome().equals(candidato));
         if (!permitido) throw new RegraException(400, "Candidato inválido.");
 
-        Votante v = new Votante(hash(cpf), novoProtocolo(), c.nome(), c.cargo());
+        Votante v = new Votante(hash(cpf), novoProtocolo(), c.nome(), c.cargo(), ip);
         try {
             votantes.saveAndFlush(v);   // a constraint única barra voto duplo
         } catch (DataIntegrityViolationException e) {
@@ -216,7 +216,7 @@ public class VotacaoService {
     /** Quem votou e quando. Nunca em quem: a escolha não é guardada junto da pessoa. */
     public List<VotanteItem> listarVotantes() {
         return votantes.findAllByOrderByVotadoEmAsc().stream()
-                .map(v -> new VotanteItem(v.getProtocolo(), v.getNome(), v.getCargo(), texto(v.getVotadoEm())))
+                .map(v -> new VotanteItem(v.getProtocolo(), v.getNome(), v.getCargo(), texto(v.getVotadoEm()), v.getIp()))
                 .toList();
     }
 

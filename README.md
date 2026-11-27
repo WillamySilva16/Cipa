@@ -12,6 +12,7 @@ Valida o CPF ou o RE na planilha de colaboradores (aba COLABORADORES_HCM), lista
 | `ADMIN_TOKEN` | Senha da tela de apuração (`/#apuracao`). |
 | `COLABORADORES_SHEET_ID`, `COLABORADORES_RANGE` | Opcionais. Padrão: aba `COLABORADORES_HCM`, colunas A:H (CPF_AJUSTADO, CPF, NOME, CARGO). Ajuste a posição com `COL_CPF`, `COL_CPF_ALT`, `COL_NOME`, `COL_RE`, `COL_CARGO` (a partir do 0). |
 | `VOTACAO_ENCERRA_EM` | Opcional. Data e hora de encerramento com fuso, ex.: `2026-12-05T18:00:00-03:00`. Depois dela a votação fecha; antes dela a apuração (placar) fica bloqueada, mas a lista de quem votou continua visível. |
+| `LIMITE_POR_MINUTO` | Opcional. Chamadas por minuto de cada IP (padrão 120). Na rede da empresa muita gente sai pelo mesmo IP. |
 | `CANDIDATOS_SHEET_ID`, `CANDIDATOS_RANGE` | Opcionais. Padrão: base de candidatos, `'Página1'!A2:B`. |
 
 ## Rodar local
@@ -28,13 +29,16 @@ Com 9 dígitos ou mais o número é tratado como CPF; com menos, como RE. O voto
 - `POST /api/validar` `{cpf}` (o campo aceita CPF ou RE) → nome, cargo e candidatos
 - `POST /api/votos` `{cpf, candidato}` → comprovante `{protocolo, nome, cargo, votadoEm}` (nunca traz o candidato)
 - `GET /api/admin/apuracao` (header `X-Admin-Token`) → total de votos por candidato
-- `GET /api/admin/votantes` (header `X-Admin-Token`) → quem votou: protocolo, nome, cargo e hora (sem a escolha)
-- `/#apuracao` → administração: resultado, quem votou, conferência de protocolo e botão **Baixar Excel** (abas Resumo, Apuração e Participação)
+- `GET /api/admin/votantes` (header `X-Admin-Token`) → quem votou: protocolo, nome, cargo, hora e IP (sem a escolha)
+- `/#apuracao` → administração: resultado, quem votou, conferência de protocolo e botão **Baixar Excel** (abas Resumo, Apuração, Participação, Por hora e Por IP)
 
 ## Sigilo do voto
 A NR-5 exige voto secreto. Por isso o sistema guarda duas coisas que **não se ligam**:
-- `votantes`: hash do CPF, protocolo, nome, cargo e hora de quem votou;
+- `votantes`: hash do CPF, protocolo, nome, cargo, hora e IP de quem votou;
 - `votos`: só o candidato escolhido, sem CPF, sem nome e sem hora. O id é sorteado, para a ordem dos votos não permitir casar um voto com a lista de quem votou.
 
 O comprovante prova a participação, mas não mostra o candidato. Não existe (nem deve existir) uma tela ou planilha de "quem votou em quem".
 Para evitar descobrir um voto comparando o placar com a lista de quem votou em tempo real, defina `VOTACAO_ENCERRA_EM`: antes dessa hora a apuração fica bloqueada.
+
+## IP de quem votou
+O IP é gravado só na tabela `votantes`, nunca junto do voto. Atrás do Railway o IP do cliente vem no header `X-Real-IP`, que a borda do Railway sobrescreve (o cliente não consegue forjar). O endereço da conexão (`getRemoteAddr`) é o do proxy, por isso não serve. A aba **Por IP** da administração e a aba **Por IP** do Excel mostram quantos votos vieram de cada IP. Muitos votos no mesmo IP não provam fraude: rede da empresa, Wi-Fi e operadora de celular compartilham IP.
